@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PURPLEZ GIVEAWAY</title>
+    <style>
+        :root { --bg: #2d3436; --card: #353b48; --primary: #6c5ce7; --text: #dfe6e9; --accent: #00b894; --danger: #d63031; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
+        
+        .container { max-width: 1200px; width: 95%; display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; margin-top: 30px; }
+        .sidebar { width: 350px; background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .wheel-area { position: relative; width: 500px; height: 500px; }
+        
+        canvas { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 0 30px rgba(0,0,0,0.6); }
+        .pointer { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 25px solid transparent; border-right: 25px solid transparent; border-top: 50px solid white; z-index: 10; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5)); }
+
+        h1, h2, h3 { margin: 0 0 15px 0; }
+        button { width: 100%; padding: 14px; margin-top: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: transform 0.1s; }
+        button:active { transform: scale(0.98); }
+        input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 6px; border: none; box-sizing: border-box; }
+        
+        .btn-host { background: var(--primary); color: white; }
+        .btn-join { background: var(--accent); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .status-badge { background: #0984e3; padding: 8px; border-radius: 4px; text-align: center; font-weight: bold; margin-bottom: 15px; }
+
+        #entries-list { max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; }
+        .entry { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9em; display: flex; align-items: center; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; display: inline-block; }
+
+        #setup-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 100; flex-direction: column; gap: 20px; }
+        #game-screen { display: none; }
+        
+        #winner-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
+        #winner-name { font-size: 5em; color: var(--accent); font-weight: bold; text-align: center; margin: 20px; text-shadow: 0 0 20px var(--accent); }
+
+        @media(max-width: 800px) { .wheel-area { width: 320px; height: 320px; } }
+    </style>
+</head>
+<body>
+
+    <!-- ROLE SELECTION -->
+    <div id="setup-screen">
+        <h1 style="font-size: 2.5rem;">PURPLEZ GIVEAWAY PARA SA MGA CUTE🖕</h1>
+        <button onclick="attemptHostLogin()" class="btn-host" style="width: 250px;">I am the Host</button>
+        <button onclick="initParticipant()" class="btn-join" style="width: 250px;">I am a Participant</button>
+        <p id="login-msg" style="color: #ff7675;"></p>
+    </div>
+
+    <!-- MAIN GAME -->
+    <div id="game-screen" class="container">
+        <!-- WHEEL -->
+        <div class="wheel-area">
+            <div class="pointer"></div>
+            <canvas id="canvas" width="800" height="800"></canvas>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="sidebar">
+            <div id="status-badge" class="status-badge">WAITING...</div>
+            
+            <!-- HOST CONTROLS -->
+            <div id="host-panel" style="display:none;">
+                <h3 style="border-bottom:1px solid #555; padding-bottom:10px;">👑 Host Controls</h3>
+                
+                <label>Multiplier (1 click = X entries):</label>
+                <input type="number" id="host-multiplier" value="1" min="1" max="10">
+                
+                <button id="btn-reg" onclick="toggleReg()" class="btn-join">Close Registration</button>
+                <button onclick="spinWheel()" class="btn-danger" style="margin-top: 20px; font-size: 1.2rem;">🚀 SPIN WHEEL</button>
+                
+                <hr style="border: 0; border-top: 1px solid #555; margin: 20px 0;">
+                <button onclick="resetGame()" style="background:#636e72;">Reset Game (Kick All)</button>
+                <button onclick="logoutHost()" style="background:#2d3436; border: 1px solid #555; margin-top:5px; font-size:0.8em">Leave Host Mode</button>
+            </div>
+
+            <!-- PARTICIPANT CONTROLS -->
+            <div id="participant-panel" style="display:none;">
+                <h3>ENTER MLBB ID</h3>
+                <input type="text" id="p-name" placeholder="Enter MLBB ID">
+                <button id="btn-join-game" onclick="joinGame()" class="btn-join">Enter Giveaway</button>
+                <p id="p-msg" style="color: orange; font-size: 0.9em; margin-top:10px;"></p>
+            </div>
+
+            <div style="margin-top: 30px;">
+                <h3>Entries (<span id="count">0</span>)</h3>
+                <div id="entries-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WINNER MODAL -->
+    <div id="winner-modal">
+        <h2 style="color:white; letter-spacing: 2px;">THE WINNER IS</h2>
+        <div id="winner-name">...</div>
+        <button onclick="closeModal()" class="btn-host" style="width: 200px;">Close</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, runTransaction } 
+        from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        // ======================================================
+        // 1. PASTE YOUR FIREBASE CONFIG HERE
+        // ======================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDha-EcP_E7GRH0_r1vv6ARN6smDMEbXnI",
+  authDomain: "giveaway-wheel-66954.firebaseapp.com",
+  projectId: "giveaway-wheel-66954",
+  storageBucket: "giveaway-wheel-66954.firebasestorage.app",
+  messagingSenderId: "878236162209",
+  appId: "1:878236162209:web:7ed0bc87ad2666d195b8e0"
+};
+
+        let db;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+        } catch(e) {
+            alert("⚠️ Missing Firebase Config!");
+        }
+
+        const GAME_DOC_ID = "giveaway_room_1";
+        
+        // --- SECURITY: SESSION ID ---
+        // Generate a random ID for this browser session. 
+        // If this matches the DB's "hostId", we are the host.
+        let mySessionId = localStorage.getItem("mySessionId");
+        if(!mySessionId) {
+            mySessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            localStorage.setItem("mySessionId", mySessionId);
+        }
+
+        let myRole = null;
+        let gameState = { entries: [], rotation: 0 };
+        let animationFrameId;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colors = ['#e17055', '#00b894', '#0984e3', '#6c5ce7', '#fdcb6e', '#d63031', '#e84393'];
+
+        // --- AUTHENTICATION LOGIC ---
+
+        window.attemptHostLogin = async () => {
+            const msg = document.getElementById('login-msg');
+            msg.innerText = "Checking permissions...";
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const sfDocRef = doc(db, "games", GAME_DOC_ID);
+                    const sfDoc = await transaction.get(sfDocRef);
+
+                    if (!sfDoc.exists()) {
+                        // Create fresh game if none exists
+                        transaction.set(sfDocRef, {
+                            hostId: mySessionId, // CLAIM IT!
+                            entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null
+                        });
+                        return "claimed";
+                    }
+
+                    const data = sfDoc.data();
+                    
+                    // IF NO HOST, CLAIM IT
+                    if (!data.hostId) {
+                        transaction.update(sfDocRef, { hostId: mySessionId });
+                        return "claimed";
+                    }
+                    
+                    // IF I AM ALREADY HOST, ALLOW
+                    if (data.hostId === mySessionId) {
+                        return "rejoined";
+                    }
+
+                    // IF SOMEONE ELSE IS HOST, REJECT
+                    throw "⛔ A Host is already active in this room!";
+                });
+
+                // Success
+                initHost();
+
+            } catch (e) {
+                console.error(e);
+                msg.innerText = e;
+            }
+        };
+
+        window.initParticipant = () => {
+            myRole = 'participant';
+            switchScreen();
+            document.getElementById('participant-panel').style.display = 'block';
+            listenToGame();
+        };
+
+        function initHost() {
+            myRole = 'host';
+            switchScreen();
+            document.getElementById('host-panel').style.display = 'block';
+            listenToGame();
+        }
+
+        function switchScreen() {
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+        }
+
+        window.logoutHost = async () => {
+             // Optional: Release the host claim so someone else can take it
+             if(confirm("Release host controls? Someone else can then claim them.")) {
+                 await updateDoc(doc(db, "games", GAME_DOC_ID), { hostId: null });
+                 location.reload();
+             }
+        }
+
+        window.closeModal = () => document.getElementById('winner-modal').style.display = 'none';
+
+        // --- GAME LOOP & LISTENER ---
+        function listenToGame() {
+            onSnapshot(doc(db, "games", GAME_DOC_ID), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    handleStateUpdate(data);
+                }
+            });
+        }
+
+        function handleStateUpdate(data) {
+            gameState.entries = data.entries || [];
+            
+            // Sync Multiplier setting visually for host (if they refreshed)
+            if(myRole === 'host' && data.multiplier) {
+                 document.getElementById('host-multiplier').value = data.multiplier;
+            }
+
+            // Update UI
+            document.getElementById('count').innerText = gameState.entries.length;
+            renderEntriesList();
+            updateButtons(data);
+
+            const badge = document.getElementById('status-badge');
+            if (data.winner) {
+                badge.innerText = "🏆 WINNER FOUND";
+                badge.style.background = "var(--accent)";
+                document.getElementById('winner-name').innerText = data.winner;
+                document.getElementById('winner-modal').style.display = 'flex';
+            } else if (data.isSpinning) {
+                badge.innerText = "🔥 WHEEL SPINNING 🔥";
+                badge.style.background = "#d63031";
+            } else {
+                badge.innerText = data.isRegOpen ? "REGISTRATION OPEN" : "REGISTRATION CLOSED";
+                badge.style.background = data.isRegOpen ? "#0984e3" : "#636e72";
+            }
+
+            if (data.isSpinning) {
+                startSyncedAnimation(data.startRotation, data.targetRotation, data.spinStartTime, data.duration);
+            } else {
+                cancelAnimationFrame(animationFrameId);
+                gameState.rotation = data.targetRotation || 0;
+                drawWheel();
+            }
+        }
+
+        function updateButtons(data) {
+            if(myRole === 'host') {
+                const regBtn = document.getElementById('btn-reg');
+                regBtn.innerText = data.isRegOpen ? "Close Registration" : "Open Registration";
+                regBtn.className = data.isRegOpen ? "btn-join" : "btn-danger";
+            } else {
+                const joinBtn = document.getElementById('btn-join-game');
+                if(!data.isRegOpen) {
+                    joinBtn.disabled = true;
+                    joinBtn.innerText = "Registration Closed";
+                    joinBtn.style.background = "#555";
+                } else {
+                    joinBtn.disabled = false;
+                    joinBtn.innerText = "Enter Giveaway";
+                    joinBtn.style.background = "var(--accent)";
+                }
+            }
+        }
+
+        // --- HOST ACTIONS ---
+        window.toggleReg = async () => {
+            const current = document.getElementById('btn-reg').innerText.includes("Close");
+            const mult = parseInt(document.getElementById('host-multiplier').value) || 1;
+            await updateDoc(doc(db, "games", GAME_DOC_ID), { isRegOpen: !current, multiplier: mult });
+        };
+
+        window.spinWheel = async () => {
+            if(gameState.entries.length < 2) return alert("Need at least 2 entries!");
+            
+            const duration = 5000;
+            const currentRot = gameState.rotation;
+            const extraSpins = 360 * 5; 
+            const randomStop = Math.floor(Math.random() * 360);
+            const target = currentRot + extraSpins + randomStop;
+
+            await updateDoc(doc(db, "games", GAME_DOC_ID), {
+                isSpinning: true,
+                startRotation: currentRot,
+                targetRotation: target,
+                spinStartTime: Date.now(),
+                duration: duration,
+                winner: null
+            });
+
+            setTimeout(() => handleElimination(target), duration + 500);
+        };
+
+        async function handleElimination(finalRotation) {
+            const numSegments = gameState.entries.length;
+            const arc = 360 / numSegments;
+            const normalized = finalRotation % 360;
+            const index = Math.floor(((360 - normalized + 270) % 360) / arc);
+            
+            const newEntries = [...gameState.entries];
+            newEntries.splice(index, 1); // ELIMINATE
+
+            let updates = { isSpinning: false, entries: newEntries };
+            if(newEntries.length === 1) updates.winner = newEntries[0].name;
+
+            await updateDoc(doc(db, "games", GAME_DOC_ID), updates);
+        }
+
+        window.resetGame = async () => {
+            if(confirm("WARNING: This will kick everyone and reset the game. Continue?")) {
+                // Keep the hostId so I don't lose access
+                await setDoc(doc(db, "games", GAME_DOC_ID), {
+                    hostId: mySessionId, 
+                    entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null
+                });
+            }
+        };
+
+        // --- PARTICIPANT ACTIONS ---
+        window.joinGame = async () => {
+            const name = document.getElementById('p-name').value;
+            if(!name) return;
+            const pMsg = document.getElementById('p-msg');
+            pMsg.innerText = "Joining...";
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(doc(db, "games", GAME_DOC_ID));
+                    if (!sfDoc.exists()) throw "Error";
+                    const data = sfDoc.data();
+                    
+                    if(!data.isRegOpen) throw "Registration Closed";
+
+                    // USE MULTIPLIER FROM DB (Set by host)
+                    const multiplier = data.multiplier || 1;
+                    const newEntries = [...data.entries];
+
+                    for(let i=0; i<multiplier; i++) {
+                        const color = colors[Math.floor(Math.random() * colors.length)];
+                        newEntries.push({ name: name, color: color, id: Date.now() + Math.random() });
+                    }
+
+                    transaction.update(doc(db, "games", GAME_DOC_ID), { entries: newEntries });
+                });
+                
+                document.getElementById('p-name').value = '';
+                pMsg.innerText = "✅ Joined!";
+                setTimeout(() => pMsg.innerText = "", 2000);
+            } catch (e) {
+                pMsg.innerText = "❌ " + e;
+            }
+        };
+
+        // --- DRAWING ---
+        function startSyncedAnimation(startRot, targetRot, startTime, duration) {
+            cancelAnimationFrame(animationFrameId);
+            function loop() {
+                const now = Date.now();
+                const elapsed = now - startTime;
+                if (elapsed < duration) {
+                    const t = elapsed / duration;
+                    const ease = (--t)*t*t+1; 
+                    gameState.rotation = startRot + ((targetRot - startRot) * ease);
+                    drawWheel();
+                    animationFrameId = requestAnimationFrame(loop);
+                } else {
+                    gameState.rotation = targetRot;
+                    drawWheel();
+                }
+            }
+            loop();
+        }
+
+        function drawWheel() {
+            if (gameState.entries.length === 0) {
+                ctx.clearRect(0,0, canvas.width, canvas.height);
+                return;
+            }
+            const numSegments = gameState.entries.length;
+            const arc = (2 * Math.PI) / numSegments;
+            
+            ctx.save();
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            ctx.translate(canvas.width/2, canvas.height/2);
+            ctx.rotate((gameState.rotation * Math.PI) / 180);
+
+            gameState.entries.forEach((entry, i) => {
+                const angle = i * arc;
+                ctx.beginPath();
+                ctx.fillStyle = entry.color;
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, canvas.width/2 - 10, angle, angle + arc);
+                ctx.lineTo(0,0);
+                ctx.fill();
+                ctx.save();
+                ctx.rotate(angle + arc / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "white";
+                ctx.font = "bold 16px sans-serif";
+                ctx.shadowColor="black"; ctx.shadowBlur=4;
+                ctx.fillText(entry.name, canvas.width/2 - 30, 6);
+                ctx.restore();
+            });
+            ctx.restore();
+        }
+
+        function renderEntriesList() {
+            const list = document.getElementById('entries-list');
+            list.innerHTML = gameState.entries.map(e => 
+                `<div class="entry"><span class="dot" style="background:${e.color}"></span> ${e.name}</div>`
+            ).join('');
+        }
+    </script>
+</body>
+</html>
