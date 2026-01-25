@@ -18,7 +18,7 @@
         h1, h2, h3 { margin: 0 0 15px 0; }
         button { width: 100%; padding: 14px; margin-top: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: transform 0.1s; }
         button:active { transform: scale(0.98); }
-        input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 6px; border: none; box-sizing: border-box; }
+        input { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 6px; border: none; box-sizing: border-box; background: #dfe6e9; color: #2d3436; font-weight: bold; }
         
         .btn-host { background: var(--primary); color: white; }
         .btn-join { background: var(--accent); color: white; }
@@ -26,14 +26,14 @@
         .status-badge { background: #0984e3; padding: 8px; border-radius: 4px; text-align: center; font-weight: bold; margin-bottom: 15px; }
 
         #entries-list { max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; }
-        .entry { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9em; display: flex; align-items: center; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; display: inline-block; }
+        .entry { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85em; display: flex; align-items: center; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; display: inline-block; flex-shrink: 0;}
 
         #setup-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 100; flex-direction: column; gap: 20px; }
         #game-screen { display: none; }
         
         #winner-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
-        #winner-name { font-size: 5em; color: var(--accent); font-weight: bold; text-align: center; margin: 20px; text-shadow: 0 0 20px var(--accent); }
+        #winner-name { font-size: 4em; color: var(--accent); font-weight: bold; text-align: center; margin: 20px; text-shadow: 0 0 20px var(--accent); padding: 0 20px; }
 
         @media(max-width: 800px) { .wheel-area { width: 320px; height: 320px; } }
     </style>
@@ -42,7 +42,7 @@
 
     <!-- ROLE SELECTION -->
     <div id="setup-screen">
-        <h1 style="font-size: 2.5rem;">PURPLEZ GIVEAWAY PARA SA MGA CUTE🖕</h1>
+        <h1 style="font-size: 2.5rem; text-align:center;">PURPLEZ GIVEAWAY<br><span style="font-size:0.6em; color:var(--accent);">PARA SA MGA CUTE🖕</span></h1>
         <button onclick="attemptHostLogin()" class="btn-host" style="width: 250px;">I am the Host</button>
         <button onclick="initParticipant()" class="btn-join" style="width: 250px;">I am a Participant</button>
         <p id="login-msg" style="color: #ff7675;"></p>
@@ -64,8 +64,16 @@
             <div id="host-panel" style="display:none;">
                 <h3 style="border-bottom:1px solid #555; padding-bottom:10px;">👑 Host Controls</h3>
                 
-                <label>Multiplier (1 click = X entries):</label>
-                <input type="number" id="host-multiplier" value="1" min="1" max="10">
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8em">Entries per person:</label>
+                        <input type="number" id="host-multiplier" value="1" min="1" max="10" onchange="updateSettings()">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8em">Spin Time (Sec):</label>
+                        <input type="number" id="host-duration" value="7" min="3" max="60" onchange="updateSettings()">
+                    </div>
+                </div>
                 
                 <button id="btn-reg" onclick="toggleReg()" class="btn-join">Close Registration</button>
                 <button onclick="spinWheel()" class="btn-danger" style="margin-top: 20px; font-size: 1.2rem;">🚀 SPIN WHEEL</button>
@@ -77,10 +85,12 @@
 
             <!-- PARTICIPANT CONTROLS -->
             <div id="participant-panel" style="display:none;">
-                <h3>ENTER MLBB ID</h3>
-                <input type="text" id="p-name" placeholder="Enter MLBB ID">
+                <h3>JOIN GIVEAWAY</h3>
+                <input type="text" id="p-fbname" placeholder="Your FB Name (GC Name)">
+                <input type="number" id="p-mlbbid" placeholder="MLBB ID (Unique)">
+                
                 <button id="btn-join-game" onclick="joinGame()" class="btn-join">Enter Giveaway</button>
-                <p id="p-msg" style="color: orange; font-size: 0.9em; margin-top:10px;"></p>
+                <p id="p-msg" style="color: orange; font-size: 0.9em; margin-top:10px; font-weight:bold;"></p>
             </div>
 
             <div style="margin-top: 30px;">
@@ -103,7 +113,7 @@
         from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         // ======================================================
-        // 1. YOUR FIREBASE CONFIG
+        // FIREBASE CONFIG
         // ======================================================
         const firebaseConfig = {
           apiKey: "AIzaSyDha-EcP_E7GRH0_r1vv6ARN6smDMEbXnI",
@@ -140,7 +150,8 @@
             startRotation: 0, 
             targetRotation: 0, 
             spinStartTime: 0, 
-            duration: 5000,
+            duration: 7000,
+            settingDuration: 7000,
             winner: null,
             isRegOpen: true 
         };
@@ -161,7 +172,13 @@
                     if (!sfDoc.exists()) {
                         transaction.set(sfDocRef, {
                             hostId: mySessionId,
-                            entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null
+                            entries: [], 
+                            isRegOpen: true, 
+                            isSpinning: false, 
+                            targetRotation: 0, 
+                            winner: null, 
+                            multiplier: 1,
+                            settingDuration: 7000
                         });
                         return;
                     }
@@ -185,7 +202,7 @@
             switchScreen();
             document.getElementById('participant-panel').style.display = 'block';
             listenToGame();
-            requestAnimationFrame(renderLoop); // Start the animation loop
+            requestAnimationFrame(renderLoop);
         };
 
         function initHost() {
@@ -193,7 +210,7 @@
             switchScreen();
             document.getElementById('host-panel').style.display = 'block';
             listenToGame();
-            requestAnimationFrame(renderLoop); // Start the animation loop
+            requestAnimationFrame(renderLoop);
         }
 
         function switchScreen() {
@@ -216,17 +233,16 @@
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     
-                    // Update Local State safely
                     gameState.entries = data.entries || [];
                     gameState.isSpinning = data.isSpinning || false;
                     gameState.startRotation = data.startRotation || 0;
                     gameState.targetRotation = data.targetRotation || 0;
                     gameState.spinStartTime = data.spinStartTime || 0;
-                    gameState.duration = data.duration || 5000;
+                    gameState.duration = data.duration || 7000;
+                    gameState.settingDuration = data.settingDuration || 7000;
                     gameState.winner = data.winner;
                     gameState.isRegOpen = data.isRegOpen;
 
-                    // Update UI Elements
                     document.getElementById('count').innerText = gameState.entries.length;
                     renderEntriesList();
                     updateUI(data);
@@ -235,8 +251,14 @@
         }
 
         function updateUI(data) {
-            if(myRole === 'host' && data.multiplier) {
-                 document.getElementById('host-multiplier').value = data.multiplier;
+            // Only update inputs if they are not currently focused
+            if(myRole === 'host') {
+                if(data.multiplier && document.activeElement.id !== 'host-multiplier') {
+                    document.getElementById('host-multiplier').value = data.multiplier;
+                }
+                if(data.settingDuration && document.activeElement.id !== 'host-duration') {
+                    document.getElementById('host-duration').value = data.settingDuration / 1000;
+                }
             }
 
             const badge = document.getElementById('status-badge');
@@ -266,18 +288,30 @@
         }
 
         // --- HOST ACTIONS ---
+        window.updateSettings = async () => {
+             const mult = parseInt(document.getElementById('host-multiplier').value) || 1;
+             const durSec = parseInt(document.getElementById('host-duration').value) || 7;
+             
+             await updateDoc(doc(db, "games", GAME_DOC_ID), { 
+                 multiplier: mult,
+                 settingDuration: durSec * 1000 // Convert to ms
+             });
+        }
+
         window.toggleReg = async () => {
-            const mult = parseInt(document.getElementById('host-multiplier').value) || 1;
-            await updateDoc(doc(db, "games", GAME_DOC_ID), { isRegOpen: !gameState.isRegOpen, multiplier: mult });
+            await updateDoc(doc(db, "games", GAME_DOC_ID), { isRegOpen: !gameState.isRegOpen });
         };
 
         window.spinWheel = async () => {
             if(gameState.entries.length < 2) return alert("Need at least 2 entries!");
             
-            // Calculate rotations
-            // Use current ACTUAL rotation as start point to prevent jumping
             const currentRot = getCurrentRotation(); 
-            const extraSpins = 360 * 6; // Spin 6 times
+            // Use the settingDuration from State (synced with DB)
+            const duration = gameState.settingDuration || 7000;
+            
+            // Calculate enough spins to cover the duration speed
+            // Roughly 360 deg per second base speed
+            const extraSpins = 360 * (duration / 1000); 
             const randomStop = Math.floor(Math.random() * 360);
             const target = currentRot + extraSpins + randomStop;
 
@@ -286,12 +320,12 @@
                 startRotation: currentRot,
                 targetRotation: target,
                 spinStartTime: Date.now(),
-                duration: 6000, // 6 seconds spin
+                duration: duration, 
                 winner: null
             });
 
-            // Trigger elimination after spin
-            setTimeout(() => handleElimination(target), 6500);
+            // Trigger elimination after spin ends + small buffer
+            setTimeout(() => handleElimination(target), duration + 500);
         };
 
         async function handleElimination(finalRotation) {
@@ -299,18 +333,12 @@
             if(numSegments === 0) return;
 
             const arc = 360 / numSegments;
-            // The pointer is at the top (270 degrees in canvas arc math usually, or simple offset)
-            // Note: In drawWheel we rotate the canvas. 
-            // Pointer is at Top. 
             const normalized = finalRotation % 360;
-            
-            // Math to find which segment is under the pointer
             const index = Math.floor(((360 - normalized + 270) % 360) / arc);
             
             const newEntries = [...gameState.entries];
-            // Ensure index is valid
             if(index >= 0 && index < newEntries.length) {
-                newEntries.splice(index, 1); // Remove the loser
+                newEntries.splice(index, 1);
             }
 
             let updates = { isSpinning: false, entries: newEntries };
@@ -323,16 +351,23 @@
             if(confirm("Reset game?")) {
                 await setDoc(doc(db, "games", GAME_DOC_ID), {
                     hostId: mySessionId, 
-                    entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null
+                    entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null, 
+                    multiplier: 1, settingDuration: 7000
                 });
             }
         };
 
         // --- PARTICIPANT ACTIONS ---
         window.joinGame = async () => {
-            const name = document.getElementById('p-name').value;
-            if(!name) return;
+            const fbName = document.getElementById('p-fbname').value.trim();
+            const mlbbId = document.getElementById('p-mlbbid').value.trim();
             const pMsg = document.getElementById('p-msg');
+
+            if(!fbName || !mlbbId) {
+                pMsg.innerText = "❌ Please fill BOTH fields!";
+                return;
+            }
+
             pMsg.innerText = "Joining...";
 
             try {
@@ -340,27 +375,45 @@
                     const sfDoc = await transaction.get(doc(db, "games", GAME_DOC_ID));
                     if (!sfDoc.exists()) throw "Error";
                     const data = sfDoc.data();
+                    
                     if(!data.isRegOpen) throw "Registration Closed";
 
+                    // CHECK DUPLICATE ID
+                    const isDuplicate = data.entries.some(entry => entry.mlbbId === mlbbId);
+                    if(isDuplicate) throw "MLBB ID already joined!";
+
+                    // APPLY MULTIPLIER
                     const multiplier = data.multiplier || 1;
                     const newEntries = [...data.entries];
+                    
+                    // Create formatted name
+                    const displayName = `${fbName} (${mlbbId})`;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+
                     for(let i=0; i<multiplier; i++) {
-                        const color = colors[Math.floor(Math.random() * colors.length)];
-                        newEntries.push({ name: name, color: color, id: Date.now() + Math.random() });
+                        newEntries.push({ 
+                            name: displayName, 
+                            mlbbId: mlbbId, // Store ID to check duplicates
+                            color: color, 
+                            id: Date.now() + Math.random() 
+                        });
                     }
+
                     transaction.update(doc(db, "games", GAME_DOC_ID), { entries: newEntries });
                 });
-                document.getElementById('p-name').value = '';
-                pMsg.innerText = "✅ Joined!";
-                setTimeout(() => pMsg.innerText = "", 2000);
+                
+                document.getElementById('p-fbname').value = '';
+                document.getElementById('p-mlbbid').value = '';
+                pMsg.innerText = "✅ Joined Successfully!";
+                pMsg.style.color = "#00b894";
+                setTimeout(() => pMsg.innerText = "", 3000);
             } catch (e) {
                 pMsg.innerText = "❌ " + e;
+                pMsg.style.color = "#d63031";
             }
         };
 
         // --- ANIMATION SYSTEM ---
-        
-        // Easing function: Ease Out Cubic
         function easeOut(t) { return (--t)*t*t+1; }
 
         function getCurrentRotation() {
@@ -379,29 +432,20 @@
         }
 
         function renderLoop() {
-            // 1. Calculate Rotation
             const rotation = getCurrentRotation();
-
-            // 2. Draw Wheel
             drawWheel(rotation);
-
-            // 3. Keep looping
             requestAnimationFrame(renderLoop);
         }
 
         function drawWheel(currentRotation) {
-            // Clear entire canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             if (gameState.entries.length === 0) return;
 
             const numSegments = gameState.entries.length;
             const arc = (2 * Math.PI) / numSegments;
             
             ctx.save();
-            // Move to center
             ctx.translate(canvas.width/2, canvas.height/2);
-            // Rotate the whole wheel
             ctx.rotate((currentRotation * Math.PI) / 180);
 
             gameState.entries.forEach((entry, i) => {
@@ -409,26 +453,27 @@
                 ctx.beginPath();
                 ctx.fillStyle = entry.color;
                 
-                // Draw Wedge
                 ctx.moveTo(0, 0);
                 ctx.arc(0, 0, canvas.width/2 - 10, angle, angle + arc);
                 ctx.lineTo(0, 0);
                 ctx.fill();
                 
-                // Draw Text
                 ctx.save();
                 ctx.rotate(angle + arc / 2);
                 ctx.textAlign = "right";
                 ctx.fillStyle = "white";
-                ctx.font = "bold 24px Segoe UI"; // Made font bigger
+                // --- BIGGER BOLD TEXT HERE ---
+                ctx.font = "bold 28px Segoe UI"; 
                 ctx.shadowColor="black"; 
                 ctx.shadowBlur=4;
-                // Move text slightly away from edge
-                ctx.fillText(entry.name, canvas.width/2 - 40, 8);
+                
+                let displayName = entry.name;
+                // Truncate slightly earlier to avoid overflow with bigger font
+                if(displayName.length > 18) displayName = displayName.substring(0, 16) + "..";
+                ctx.fillText(displayName, canvas.width/2 - 40, 8);
                 ctx.restore();
             });
             
-            // Draw Center Circle (Hub)
             ctx.beginPath();
             ctx.arc(0, 0, 30, 0, 2 * Math.PI);
             ctx.fillStyle = "white";
@@ -440,10 +485,12 @@
         function renderEntriesList() {
             const list = document.getElementById('entries-list');
             list.innerHTML = gameState.entries.map(e => 
-                `<div class="entry"><span class="dot" style="background:${e.color}"></span> ${e.name}</div>`
+                `<div class="entry">
+                    <span class="dot" style="background:${e.color}"></span> 
+                    <span>${e.name}</span>
+                 </div>`
             ).join('');
         }
     </script>
-
 </body>
 </html>
