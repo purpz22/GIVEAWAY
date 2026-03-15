@@ -43,9 +43,9 @@
     <!-- ROLE SELECTION -->
     <div id="setup-screen">
         <h1 style="font-size: 2.5rem; text-align:center;">Astrea GIVEAWAY<br><span style="font-size:0.6em; color:var(--accent);">PARA SA MGA CUTE🖕</span></h1>
-        <button onclick="attemptHostLogin()" class="btn-host" style="width: 250px;">I am the Host</button>
-        <button onclick="initParticipant()" class="btn-join" style="width: 250px;">I am a Participant</button>
-        <p id="login-msg" style="color: #ff7675;"></p>
+        <!-- Host button removed - access via URL ?admin=true -->
+        <button id="main-join-btn" onclick="initParticipant()" class="btn-join" style="width: 250px;">Join Giveaway</button>
+        <p id="login-msg" style="color: #ff7675; font-weight: bold;"></p>
     </div>
 
     <!-- MAIN GAME -->
@@ -112,9 +112,6 @@
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, runTransaction } 
         from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // ======================================================
-        // FIREBASE CONFIG
-        // ======================================================
         const firebaseConfig = {
           apiKey: "AIzaSyDha-EcP_E7GRH0_r1vv6ARN6smDMEbXnI",
           authDomain: "giveaway-wheel-66954.firebaseapp.com",
@@ -133,37 +130,30 @@
         }
 
         const GAME_DOC_ID = "giveaway_room_1";
-        
-        // --- SESSION ---
-        let mySessionId = localStorage.getItem("mySessionId");
-        if(!mySessionId) {
-            mySessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
-            localStorage.setItem("mySessionId", mySessionId);
-        }
+        let mySessionId = localStorage.getItem("mySessionId") || (Math.random().toString(36).substring(2) + Date.now().toString(36));
+        localStorage.setItem("mySessionId", mySessionId);
 
         let myRole = null;
-        
-        // --- GLOBAL GAME STATE ---
-        let gameState = { 
-            entries: [], 
-            isSpinning: false, 
-            startRotation: 0, 
-            targetRotation: 0, 
-            spinStartTime: 0, 
-            duration: 7000,
-            settingDuration: 7000,
-            winner: null,
-            isRegOpen: true 
-        };
+        let gameState = { entries: [], isSpinning: false, startRotation: 0, targetRotation: 0, spinStartTime: 0, duration: 7000, settingDuration: 7000, winner: null, isRegOpen: true };
 
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const colors = ['#e17055', '#00b894', '#0984e3', '#6c5ce7', '#fdcb6e', '#d63031', '#e84393'];
 
-        // --- AUTHENTICATION ---
+        // --- AUTOMATIC ROLE DETECTION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('admin') === 'true') {
+                attemptHostLogin();
+            }
+        });
+
         window.attemptHostLogin = async () => {
             const msg = document.getElementById('login-msg');
-            msg.innerText = "Checking permissions...";
+            const joinBtn = document.getElementById('main-join-btn');
+            msg.innerText = "Verifying Admin Link...";
+            joinBtn.style.display = "none";
+            
             try {
                 await runTransaction(db, async (transaction) => {
                     const sfDocRef = doc(db, "games", GAME_DOC_ID);
@@ -171,14 +161,8 @@
 
                     if (!sfDoc.exists()) {
                         transaction.set(sfDocRef, {
-                            hostId: mySessionId,
-                            entries: [], 
-                            isRegOpen: true, 
-                            isSpinning: false, 
-                            targetRotation: 0, 
-                            winner: null, 
-                            multiplier: 1,
-                            settingDuration: 7000
+                            hostId: mySessionId, entries: [], isRegOpen: true, isSpinning: false, 
+                            targetRotation: 0, winner: null, multiplier: 1, settingDuration: 7000
                         });
                         return;
                     }
@@ -187,13 +171,13 @@
                     if (!data.hostId || data.hostId === mySessionId) {
                         transaction.update(sfDocRef, { hostId: mySessionId });
                     } else {
-                        throw "⛔ Room already has a host!";
+                        throw "⛔ Another host is already active!";
                     }
                 });
                 initHost();
             } catch (e) {
-                console.error(e);
                 msg.innerText = e;
+                joinBtn.style.display = "block";
             }
         };
 
@@ -221,18 +205,16 @@
         window.logoutHost = async () => {
              if(confirm("Release host controls?")) {
                  await updateDoc(doc(db, "games", GAME_DOC_ID), { hostId: null });
-                 location.reload();
+                 window.location.href = window.location.pathname; // Redirect to clean URL
              }
         }
 
         window.closeModal = () => document.getElementById('winner-modal').style.display = 'none';
 
-        // --- LISTENER ---
         function listenToGame() {
             onSnapshot(doc(db, "games", GAME_DOC_ID), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    
                     gameState.entries = data.entries || [];
                     gameState.isSpinning = data.isSpinning || false;
                     gameState.startRotation = data.startRotation || 0;
@@ -242,7 +224,6 @@
                     gameState.settingDuration = data.settingDuration || 7000;
                     gameState.winner = data.winner;
                     gameState.isRegOpen = data.isRegOpen;
-
                     document.getElementById('count').innerText = gameState.entries.length;
                     renderEntriesList();
                     updateUI(data);
@@ -251,30 +232,21 @@
         }
 
         function updateUI(data) {
-            // Only update inputs if they are not currently focused
             if(myRole === 'host') {
-                if(data.multiplier && document.activeElement.id !== 'host-multiplier') {
-                    document.getElementById('host-multiplier').value = data.multiplier;
-                }
-                if(data.settingDuration && document.activeElement.id !== 'host-duration') {
-                    document.getElementById('host-duration').value = data.settingDuration / 1000;
-                }
+                if(data.multiplier && document.activeElement.id !== 'host-multiplier') document.getElementById('host-multiplier').value = data.multiplier;
+                if(data.settingDuration && document.activeElement.id !== 'host-duration') document.getElementById('host-duration').value = data.settingDuration / 1000;
             }
-
             const badge = document.getElementById('status-badge');
             if (data.winner) {
-                badge.innerText = "🏆 WINNER FOUND";
-                badge.style.background = "var(--accent)";
+                badge.innerText = "🏆 WINNER FOUND"; badge.style.background = "var(--accent)";
                 document.getElementById('winner-name').innerText = data.winner;
                 document.getElementById('winner-modal').style.display = 'flex';
             } else if (data.isSpinning) {
-                badge.innerText = "🔥 WHEEL SPINNING 🔥";
-                badge.style.background = "#d63031";
+                badge.innerText = "🔥 WHEEL SPINNING 🔥"; badge.style.background = "#d63031";
             } else {
                 badge.innerText = data.isRegOpen ? "REGISTRATION OPEN" : "REGISTRATION CLOSED";
                 badge.style.background = data.isRegOpen ? "#0984e3" : "#636e72";
             }
-
             if(myRole === 'host') {
                 const regBtn = document.getElementById('btn-reg');
                 regBtn.innerText = data.isRegOpen ? "Close Registration" : "Open Registration";
@@ -287,15 +259,10 @@
             }
         }
 
-        // --- HOST ACTIONS ---
         window.updateSettings = async () => {
              const mult = parseInt(document.getElementById('host-multiplier').value) || 1;
              const durSec = parseInt(document.getElementById('host-duration').value) || 7;
-             
-             await updateDoc(doc(db, "games", GAME_DOC_ID), { 
-                 multiplier: mult,
-                 settingDuration: durSec * 1000 // Convert to ms
-             });
+             await updateDoc(doc(db, "games", GAME_DOC_ID), { multiplier: mult, settingDuration: durSec * 1000 });
         }
 
         window.toggleReg = async () => {
@@ -304,128 +271,69 @@
 
         window.spinWheel = async () => {
             if(gameState.entries.length < 2) return alert("Need at least 2 entries!");
-            
             const currentRot = getCurrentRotation(); 
-            // Use the settingDuration from State (synced with DB)
             const duration = gameState.settingDuration || 7000;
-            
-            // Calculate enough spins to cover the duration speed
-            // Roughly 360 deg per second base speed
             const extraSpins = 360 * (duration / 1000); 
             const randomStop = Math.floor(Math.random() * 360);
             const target = currentRot + extraSpins + randomStop;
-
-            await updateDoc(doc(db, "games", GAME_DOC_ID), {
-                isSpinning: true,
-                startRotation: currentRot,
-                targetRotation: target,
-                spinStartTime: Date.now(),
-                duration: duration, 
-                winner: null
-            });
-
-            // Trigger elimination after spin ends + small buffer
+            await updateDoc(doc(db, "games", GAME_DOC_ID), { isSpinning: true, startRotation: currentRot, targetRotation: target, spinStartTime: Date.now(), duration: duration, winner: null });
             setTimeout(() => handleElimination(target), duration + 500);
         };
 
         async function handleElimination(finalRotation) {
             const numSegments = gameState.entries.length;
             if(numSegments === 0) return;
-
             const arc = 360 / numSegments;
             const normalized = finalRotation % 360;
             const index = Math.floor(((360 - normalized + 270) % 360) / arc);
-            
             const newEntries = [...gameState.entries];
-            if(index >= 0 && index < newEntries.length) {
-                newEntries.splice(index, 1);
-            }
-
+            if(index >= 0 && index < newEntries.length) newEntries.splice(index, 1);
             let updates = { isSpinning: false, entries: newEntries };
             if(newEntries.length === 1) updates.winner = newEntries[0].name;
-
             await updateDoc(doc(db, "games", GAME_DOC_ID), updates);
         }
 
         window.resetGame = async () => {
             if(confirm("Reset game?")) {
                 await setDoc(doc(db, "games", GAME_DOC_ID), {
-                    hostId: mySessionId, 
-                    entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null, 
-                    multiplier: 1, settingDuration: 7000
+                    hostId: mySessionId, entries: [], isRegOpen: true, isSpinning: false, targetRotation: 0, winner: null, multiplier: 1, settingDuration: 7000
                 });
             }
         };
 
-        // --- PARTICIPANT ACTIONS ---
         window.joinGame = async () => {
             const fbName = document.getElementById('p-fbname').value.trim();
             const mlbbId = document.getElementById('p-mlbbid').value.trim();
             const pMsg = document.getElementById('p-msg');
-
-            if(!fbName || !mlbbId) {
-                pMsg.innerText = "❌ Please fill BOTH fields!";
-                return;
-            }
-
+            if(!fbName || !mlbbId) { pMsg.innerText = "❌ Please fill BOTH fields!"; return; }
             pMsg.innerText = "Joining...";
-
             try {
                 await runTransaction(db, async (transaction) => {
                     const sfDoc = await transaction.get(doc(db, "games", GAME_DOC_ID));
-                    if (!sfDoc.exists()) throw "Error";
                     const data = sfDoc.data();
-                    
                     if(!data.isRegOpen) throw "Registration Closed";
-
-                    // CHECK DUPLICATE ID
-                    const isDuplicate = data.entries.some(entry => entry.mlbbId === mlbbId);
-                    if(isDuplicate) throw "MLBB ID already joined!";
-
-                    // APPLY MULTIPLIER
+                    if(data.entries.some(entry => entry.mlbbId === mlbbId)) throw "MLBB ID already joined!";
                     const multiplier = data.multiplier || 1;
                     const newEntries = [...data.entries];
-                    
-                    // Create formatted name
                     const displayName = `${fbName} (${mlbbId})`;
                     const color = colors[Math.floor(Math.random() * colors.length)];
-
                     for(let i=0; i<multiplier; i++) {
-                        newEntries.push({ 
-                            name: displayName, 
-                            mlbbId: mlbbId, // Store ID to check duplicates
-                            color: color, 
-                            id: Date.now() + Math.random() 
-                        });
+                        newEntries.push({ name: displayName, mlbbId: mlbbId, color: color, id: Date.now() + Math.random() });
                     }
-
                     transaction.update(doc(db, "games", GAME_DOC_ID), { entries: newEntries });
                 });
-                
-                document.getElementById('p-fbname').value = '';
-                document.getElementById('p-mlbbid').value = '';
-                pMsg.innerText = "✅ Joined Successfully!";
-                pMsg.style.color = "#00b894";
+                document.getElementById('p-fbname').value = ''; document.getElementById('p-mlbbid').value = '';
+                pMsg.innerText = "✅ Joined Successfully!"; pMsg.style.color = "#00b894";
                 setTimeout(() => pMsg.innerText = "", 3000);
-            } catch (e) {
-                pMsg.innerText = "❌ " + e;
-                pMsg.style.color = "#d63031";
-            }
+            } catch (e) { pMsg.innerText = "❌ " + e; pMsg.style.color = "#d63031"; }
         };
 
-        // --- ANIMATION SYSTEM ---
         function easeOut(t) { return (--t)*t*t+1; }
-
         function getCurrentRotation() {
             if (!gameState.isSpinning) return gameState.targetRotation;
-
             const now = Date.now();
             const elapsed = now - gameState.spinStartTime;
-            
-            if (elapsed >= gameState.duration) {
-                return gameState.targetRotation;
-            }
-
+            if (elapsed >= gameState.duration) return gameState.targetRotation;
             const t = elapsed / gameState.duration;
             const easedT = easeOut(t);
             return gameState.startRotation + (gameState.targetRotation - gameState.startRotation) * easedT;
@@ -440,56 +348,25 @@
         function drawWheel(currentRotation) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (gameState.entries.length === 0) return;
-
             const numSegments = gameState.entries.length;
             const arc = (2 * Math.PI) / numSegments;
-            
             ctx.save();
             ctx.translate(canvas.width/2, canvas.height/2);
             ctx.rotate((currentRotation * Math.PI) / 180);
-
             gameState.entries.forEach((entry, i) => {
                 const angle = i * arc;
-                ctx.beginPath();
-                ctx.fillStyle = entry.color;
-                
-                ctx.moveTo(0, 0);
-                ctx.arc(0, 0, canvas.width/2 - 10, angle, angle + arc);
-                ctx.lineTo(0, 0);
-                ctx.fill();
-                
-                ctx.save();
-                ctx.rotate(angle + arc / 2);
-                ctx.textAlign = "right";
-                ctx.fillStyle = "white";
-                // --- BIGGER BOLD TEXT HERE ---
-                ctx.font = "bold 28px Segoe UI"; 
-                ctx.shadowColor="black"; 
-                ctx.shadowBlur=4;
-                
+                ctx.beginPath(); ctx.fillStyle = entry.color; ctx.moveTo(0, 0); ctx.arc(0, 0, canvas.width/2 - 10, angle, angle + arc); ctx.lineTo(0, 0); ctx.fill();
+                ctx.save(); ctx.rotate(angle + arc / 2); ctx.textAlign = "right"; ctx.fillStyle = "white"; ctx.font = "bold 28px Segoe UI"; ctx.shadowColor="black"; ctx.shadowBlur=4;
                 let displayName = entry.name;
-                // Truncate slightly earlier to avoid overflow with bigger font
                 if(displayName.length > 18) displayName = displayName.substring(0, 16) + "..";
-                ctx.fillText(displayName, canvas.width/2 - 40, 8);
-                ctx.restore();
+                ctx.fillText(displayName, canvas.width/2 - 40, 8); ctx.restore();
             });
-            
-            ctx.beginPath();
-            ctx.arc(0, 0, 30, 0, 2 * Math.PI);
-            ctx.fillStyle = "white";
-            ctx.fill();
-            
-            ctx.restore();
+            ctx.beginPath(); ctx.arc(0, 0, 30, 0, 2 * Math.PI); ctx.fillStyle = "white"; ctx.fill(); ctx.restore();
         }
 
         function renderEntriesList() {
             const list = document.getElementById('entries-list');
-            list.innerHTML = gameState.entries.map(e => 
-                `<div class="entry">
-                    <span class="dot" style="background:${e.color}"></span> 
-                    <span>${e.name}</span>
-                 </div>`
-            ).join('');
+            list.innerHTML = gameState.entries.map(e => `<div class="entry"><span class="dot" style="background:${e.color}"></span><span>${e.name}</span></div>`).join('');
         }
     </script>
 </body>
